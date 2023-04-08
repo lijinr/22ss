@@ -1,0 +1,1337 @@
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ayDraw</title>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    color: aqua;
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+}
+
+body {
+    background: transparent;
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+}
+
+
+*:not(input, checkbox, textarea) {
+
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+
+}
+
+.popup_container {
+    position: absolute;
+    z-index: 1000;
+    left: 50%;
+    top: 0;
+}
+
+#H5AlertView {
+    width: 220px;
+    height: 300px;
+    position: absolute;
+    left: -110px;
+    top: 150px;
+    text-align: center;
+    zoom: 0.8;
+}
+
+#title-text {
+    padding-top: 0px;
+    font-size: 23px;
+  font-weight:600;
+    color: aqua;
+}
+
+#info-text {
+    padding: 10px;
+    color: aqua;
+}
+
+#content-view {
+    z-index: 0;
+    background: black;
+    position: relative;
+    top: 0px;
+    border: 1px solid aqua;
+    border-radius: 30px;
+    padding: 25px;
+}
+
+button {
+    width: 100%;
+    height: 40px;
+    color: magenta;
+    background-color: #14b7ff;
+    display: inline-block;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    outline: none;
+    border: none;
+    border-radius: 7px;
+    padding: 0 8px;
+    margin: 5px 0;
+    font-size: 17px;
+}
+
+button:active {
+    background-color: black;
+    transform: translateY(2px);
+}
+</style>
+</head>
+
+<body>
+<!--悬浮菜单-->
+<div class="popup_container">
+<div id="H5AlertView">
+<script>
+function draw(fps) {
+    window.draw_state = 1;
+}
+
+function unDraw() {
+    clearCtx();
+    window.draw_state = 0;
+    setTimeout(function(){
+},100);
+}
+  
+  
+function hideMenu() {
+    var menu = document.querySelector("#H5AlertView");
+    menu.style.display = 'none';
+
+    setWindowTouch(false);
+}
+</script>
+<div id="content-view">
+<div>shao修复
+    <button onclick="draw()">开启绘制</button>
+    <button onclick="unDraw()">关闭绘制</button>
+    <button onclick="hideMenu()">隐藏菜单</button>
+</div>
+</div>
+</div>
+</div>
+</body>
+<script>
+
+document.body.addEventListener('touchstart', function () {});
+    
+setWindowDrag(0, 0, 0, 0);
+
+setButtonImage();
+
+var iosScale = window.devicePixelRatio;
+var sWidth = 0; 
+var sHeight = 0; 
+
+var canvasDom = document.createElement("canvas");
+document.body.appendChild(canvasDom);
+canvasDom.style.height = "100%";
+canvasDom.style.width = "100%";
+
+var layout = function()
+{
+
+    if(window.lastorientation==window.orientation) return;
+    window.lastorientation=window.orientation;
+    
+    if(Math.abs(window.orientation)==90) {
+        setWindowRect(0,0,window.screen.height,window.screen.width);
+        canvasDom.width = window.screen.height * iosScale;
+        canvasDom.height = window.screen.width * iosScale;
+        sWidth = window.screen.height;
+        sHeight = window.screen.width;
+    } else {
+        setWindowRect(0,0,window.screen.width,window.screen.height);
+        canvasDom.height = window.screen.height * iosScale;
+        canvasDom.width = window.screen.width * iosScale;
+        sWidth = window.screen.width;
+        sHeight = window.screen.height;
+    }
+}
+
+layout();
+window.addEventListener("orientationchange", layout, false);
+
+setButtonAction(function(){
+        
+     var menu = document.querySelector("#H5AlertView");
+     if(menu.style.display=='none') {
+         menu.style.display='block';
+         setWindowTouch(true);
+     } else {
+         menu.style.display='none';
+         setWindowTouch(false);
+     }
+});
+
+
+var ctx = canvasDom.getContext('2d');
+setLineWidth(iosScale);
+var fontFamily = " Arial";
+
+var cacheTimer = null; 
+var drawTimer = null; 
+var actorCache = []; 
+
+var baseAddr = Number(h5gg.getRangesList(0)[0].start); 
+var GWorld = 0; 
+  function drawCache() {
+      if (isNull(GWorld)) return;                    
+      var Level = readLong(GWorld + 0x90);
+      var ActorArray = readLong(Level + 0xA0);
+      var ActorCount = readInt(Level + 0xA8);
+      var tempArr = [];    
+      for (var i = 0; i < ActorCount; i++) {
+        var actor = readLong(ActorArray + i * 8);
+        if (isNull(actor)) continue;
+        var hpmax = readFloat(actor + 0xed0);
+        if (hpmax == 100 || hpmax == 110 || hpmax == 120 || hpmax == 130 || hpmax == 140 || hpmax == 150 || hpmax == 160 || hpmax == 170 || hpmax == 180 || hpmax == 190 || hpmax == 200) {
+          tempArr.push(actor);
+        }
+      }
+      actorCache = tempArr;
+    }
+
+    function shadowDraw() {
+      clearCtx();
+      GWorld = readLong(baseAddr + 0xAAB00C0);
+      if (isNull(GWorld)) return;
+      var NetDriver = readLong(GWorld + 0x98);
+      var ServerConnection = readLong(NetDriver + 0x88);
+      var localPlayerController = readLong(ServerConnection + 0x30);
+      var mySelf = readLong(localPlayerController + 0x6d0);
+      var teamCopy = readInt(mySelf + 0xbc0);
+      myTeam = teamCopy <= 100 ? teamCopy : myTeam
+      var playerCameraManager = readLong(localPlayerController + 0x758);
+      if (isNull(playerCameraManager)) return;
+      var povAddr = playerCameraManager + 0x12e0 + 0x10;
+      var camViewInfo = {
+        Location: {
+          X: readFloat(povAddr),
+          Y: readFloat(povAddr + 4),
+          Z: readFloat(povAddr + 4 + 4)
+        },
+        Rotation: {
+          Pitch: readFloat(povAddr + 0x18),
+          Yaw: readFloat(povAddr + 0x18 + 4),
+          Roll: readFloat(povAddr + 0x18 + 4 + 4)
+        },
+        FOV: readFloat(povAddr + 0x24)
+      }
+
+      var tempMatrix = RotatorToMatrix(camViewInfo.Rotation);
+
+      var playerCout = 0;
+      for (var i = 0; i < actorCache.length; i++) {
+        var actor = actorCache[i];
+        if (mySelf == actor) continue;
+        var bDead = readInt(actor + 0xf30)
+        if (bDead != 2) continue;
+        var team = readInt(actor + 0xbc0);
+        if (team == -1) continue;
+        if (myTeam == team) continue;
+        var hp = readFloat(actor + 0xec8);
+        var rootComponent = readLong(actor + 0x270);
+        if (isNull(rootComponent)) continue;
+        var worldPos = {
+
+          X: readFloat(rootComponent + 0x1d0),
+          Y: readFloat(rootComponent + 0x1d0 + 4),
+          Z: readFloat(rootComponent + 0x1d0 + 4 + 4)
+        }
+   
+        var distX = (worldPos.X - camViewInfo.Location.X) / 100;
+        var distY = (worldPos.Y - camViewInfo.Location.Y) / 100;
+        var distance = (distX * distX) + (distY * distY);
+        var distZ = (worldPos.Z - camViewInfo.Location.Z) / 100;
+        distance = Math.ceil(Math.sqrt((distZ * distZ) + distance));
+
+        var zb1 = {
+          X: worldPos.X,
+          Y: worldPos.Y,
+          Z: worldPos.Z + 80.0
+        }
+        var zb2 = {
+          X: worldPos.X,
+          Y: worldPos.Y,
+          Z: worldPos.Z - 80.0
+        }
+        var fkzb1 = world2Screen(zb1, camViewInfo, tempMatrix);
+        var fkzb2 = world2Screen(zb2, camViewInfo, tempMatrix);
+        var fkgao = fkzb2.Y - fkzb1.Y;
+        var fkkuan = fkgao / 2;
+        //bIsAI
+        var bIsAI = Number(h5gg.getValue(actor + 0xbdc, "U8"));
+        
+        
+      
+        
+var selflocalPlayerbase = readLong(localPlayerController + 0x6d0); //Pawn* Pawn
+
+                    var weaponManagerComponent = readLong(selflocalPlayerbase + 0x24e0); //CharacterWeaponManagerComponent* WeaponManagerComponent;
+
+                    var cachedCurUseWeapon = readLong(weaponManagerComponent + 0x300); //STExtraWeapon* CachedCurUseWeapon
+
+                    var shootWeaponComponent = readLong(cachedCurUseWeapon + 0x10c8); //STExtraShootWeaponComponent* ShootWeaponComponent
+
+                    var ownerShootWeapon = readLong(shootWeaponComponent + 0x240); //STExtraShootWeapon* OwnerShootWeapon
+
+                    var shootWeaponEntityComp = readLong(ownerShootWeapon + 0x12f8); //ShootWeaponEntity* ShootWeaponEntityComp
+    
+        
+         
+          
+
+        //读名字可能消耗性能，不需要注释即可⬇️⬇️⬇️⬇️⬇️⬇️
+        //PlayerName
+        //var nameAddr = readLong(actor + 0xb50);
+        //name = nameAddr.toString(16);
+        //if (!isNull(nameAddr)) {
+          //var name = "";
+          //for (var s = 0; s < 14; s++) {
+            //var after = Number(h5gg.getValue(nameAddr + s * 2, "U8")).toString(16).padStart(2, '0');
+            //var before = Number(h5gg.getValue(nameAddr + s * 2 + 1, "U8")).toString(16).padStart(2, '0');
+            //var charCode = before + after;
+            //if (charCode == "0000") break;
+
+            //name += String.fromCharCode(parseInt(charCode, 16));
+          //}
+        //}
+        //读名字可能消耗性能，不需要注释即可⬆️⬆️⬆️⬆️⬆️⬆️
+        
+
+        var actorInfo = {
+          x: fkzb1.X,
+          y: fkzb1.Y,
+          w: fkkuan,
+          h: fkgao,
+          hp: hp,
+          isAI: bIsAI,
+          team: team,
+          name: name,
+          dis: distance,        
+          siwang: bDead,                    
+          distZ: distZ,
+
+        };
+        shadowInfo(actorInfo);
+        playerCout++;
+        if (team == myTeam) {
+          playerCout--;
+        }
+
+        if (team == -1) {
+          playerCout--;
+        }
+
+      }
+
+
+
+      drawText(playerCout, sWidth / 2 + 1, 3 + 1, 30, "#808080", true);
+      drawText(playerCout, sWidth / 2, 3, 30, "red", true);
+
+    }
+
+
+    // drawLine(0, 0, 100, 100, "#f00");
+    // drawCircle(250, 250, 50, "#f00", false);
+    // drawRect(100, 100, 50, 50, "", false);
+    // drawRoundRect(300, 300, 50, 50, 10, "#f00", false);
+    // drawText("Shadow-", 100, 400, 16, "#f00", false);
+
+    
+    
+   
+    function shadowInfo(objectInfo) {
+      
+      
+                
+
+
+      var color = "yellow";
+
+      //if (objectInfo.siwang == 2) {
+
+
+      if (objectInfo.team != objectInfo.MT) {
+        //随机颜色
+        if (objectInfo.team == 1) {
+          var colorStr1 = "";
+        } else if (objectInfo.team == 2) {
+          var colorStr = colorStr2;
+        } else if (objectInfo.team == 3) {
+          var colorStr = colorStr3;
+        } else if (objectInfo.team == 4) {
+          var colorStr = colorStr4;
+        } else if (objectInfo.team == 5) {
+          var colorStr = colorStr5;
+        } else if (objectInfo.team == 6) {
+          var colorStr = colorStr6;
+        } else if (objectInfo.team == 7) {
+          var colorStr = colorStr7;
+        } else if (objectInfo.team == 8) {
+          var colorStr = colorStr8;
+        } else if (objectInfo.team == 9) {
+          var colorStr = colorStr9;
+        } else if (objectInfo.team == 10) {
+          var colorStr = colorStr10;
+        } else if (objectInfo.team == 11) {
+          var colorStr = colorStr11;
+        } else if (objectInfo.team == 12) {
+          var colorStr = colorStr12;
+        } else if (objectInfo.team == 13) {
+          var colorStr = colorStr13;
+        } else if (objectInfo.team == 14) {
+          var colorStr = colorStr14;
+        } else if (objectInfo.team == 15) {
+          var colorStr = colorStr15;
+        } else if (objectInfo.team == 16) {
+          var colorStr = colorStr16;
+        } else if (objectInfo.team == 17) {
+          var colorStr = colorStr17;
+        } else if (objectInfo.team == 18) {
+          var colorStr = colorStr18;
+        } else if (objectInfo.team == 19) {
+          var colorStr = colorStr19;
+        } else if (objectInfo.team == 20) {
+          var colorStr = colorStr10;
+        } else if (objectInfo.team == 21) {
+          var colorStr = colorStr21;
+        } else if (objectInfo.team == 22) {
+          var colorStr = colorStr22;
+        } else if (objectInfo.team == 23) {
+          var colorStr = colorStr23;
+        } else if (objectInfo.team == 24) {
+          var colorStr = colorStr24;
+        } else if (objectInfo.team == 25) {
+          var colorStr = colorStr25;
+        } else if (objectInfo.team == 26) {
+          var colorStr = colorStr26;
+        } else if (objectInfo.team == 27) {
+          var colorStr = colorStr27;
+        } else if (objectInfo.team == 28) {
+          var colorStr = colorStr28;
+        } else if (objectInfo.team == 9) {
+          var colorStr = colorStr29;
+        } else if (objectInfo.team == 30) {
+          var colorStr = colorStr30;
+        } else if (objectInfo.team == 31) {
+          var colorStr = colorStr31;
+        } else if (objectInfo.team == 32) {
+          var colorStr = colorStr32;
+        } else if (objectInfo.team == 33) {
+          var colorStr = colorStr33;
+        } else if (objectInfo.team == 34) {
+          var colorStr = colorStr34;
+        } else if (objectInfo.team == 35) {
+          var colorStr = colorStr35;
+        } else if (objectInfo.team == 36) {
+          var colorStr = colorStr36;
+        } else if (objectInfo.team == 37) {
+          var colorStr = colorStr37;
+        } else if (objectInfo.team == 38) {
+          var colorStr = colorStr38;
+        } else if (objectInfo.team == 39) {
+          var colorStr = colorStr39;
+        } else if (objectInfo.team == 40) {
+          var colorStr = colorStr40;
+        } else if (objectInfo.team == 41) {
+          var colorStr = colorStr41;
+        } else if (objectInfo.team == 42) {
+          var colorStr = colorStr42;
+        } else if (objectInfo.team == 43) {
+          var colorStr = colorStr43;
+        } else if (objectInfo.team == 44) {
+          var colorStr = colorStr44;
+        } else if (objectInfo.team == 45) {
+          var colorStr = colorStr45;
+        } else if (objectInfo.team == 46) {
+          var colorStr = colorStr46;
+        } else if (objectInfo.team == 47) {
+          var colorStr = colorStr47;
+        } else if (objectInfo.team == 48) {
+          var colorStr = colorStr48;
+        } else if (objectInfo.team == 49) {
+          var colorStr = colorStr49;
+        } else if (objectInfo.team == 50) {
+          var colorStr = colorStr50;
+        } else if (objectInfo.team == 51) {
+          var colorStr = colorStr51;
+        } else if (objectInfo.team == 52) {
+          var colorStr = colorStr52;
+        } else if (objectInfo.team == 53) {
+          var colorStr = colorStr53;
+        } else if (objectInfo.team == 54) {
+          var colorStr = colorStr54;
+        } else if (objectInfo.team == 55) {
+          var colorStr = colorStr55;
+        } else if (objectInfo.team == 56) {
+          var colorStr = colorStr56;
+        } else if (objectInfo.team == 57) {
+          var colorStr = colorStr58;
+        } else if (objectInfo.team == 59) {
+          var colorStr = colorStr59;
+        } else if (objectInfo.team == 60) {
+          var colorStr = colorStr60;
+        } else if (objectInfo.team == 61) {
+          var colorStr = colorStr62;
+        } else if (objectInfo.team == 63) {
+          var colorStr = colorStr63;
+        } else if (objectInfo.team == 64) {
+          var colorStr = colorStr64;
+        } else if (objectInfo.team == 65) {
+          var colorStr = colorStr65;
+        } else if (objectInfo.team == 66) {
+          var colorStr = colorStr66;
+        } else if (objectInfo.team == 67) {
+          var colorStr = colorStr67;
+        } else if (objectInfo.team == 68) {
+          var colorStr = colorStr68;
+        } else if (objectInfo.team == 69) {
+          var colorStr = colorStr69;
+        } else if (objectInfo.team == 70) {
+          var colorStr = colorStr70;
+        } else if (objectInfo.team == 71) {
+          var colorStr = colorStr71;
+        } else if (objectInfo.team == 72) {
+          var colorStr = colorStr72;
+        } else if (objectInfo.team == 73) {
+          var colorStr = colorStr73;
+        } else if (objectInfo.team == 74) {
+          var colorStr = colorStr74;
+        } else if (objectInfo.team == 75) {
+          var colorStr = colorStr75;
+        } else if (objectInfo.team == 76) {
+          var colorStr = colorStr76;
+        } else if (objectInfo.team == 77) {
+          var colorStr = colorStr77;
+        } else if (objectInfo.team == 78) {
+          var colorStr = colorStr78;
+        } else if (objectInfo.team == 79) {
+          var colorStr = colorStr79;
+        } else if (objectInfo.team == 80) {
+          var colorStr = colorStr80;
+        } else if (objectInfo.team == 81) {
+          var colorStr = colorStr81;
+        } else if (objectInfo.team == 82) {
+          var colorStr = colorStr82;
+        } else if (objectInfo.team == 83) {
+          var colorStr = colorStr83;
+        } else if (objectInfo.team == 84) {
+          var colorStr = colorStr84;
+        } else if (objectInfo.team == 85) {
+          var colorStr = colorStr85;
+        } else if (objectInfo.team == 86) {
+          var colorStr = colorStr86;
+        } else if (objectInfo.team == 87) {
+          var colorStr = colorStr87;
+        } else if (objectInfo.team == 88) {
+          var colorStr = colorStr88;
+        } else if (objectInfo.team == 89) {
+          var colorStr = colorStr89;
+        } else if (objectInfo.team == 90) {
+          var colorStr = colorStr90;
+        } else if (objectInfo.team == 91) {
+          var colorStr = colorStr91;
+        } else if (objectInfo.team == 92) {
+          var colorStr = colorStr92;
+        } else if (objectInfo.team == 93) {
+          var colorStr = colorStr93;
+        } else if (objectInfo.team == 94) {
+          var colorStr = colorStr94;
+        } else if (objectInfo.team == 95) {
+          var colorStr = colorStr95;
+        } else if (objectInfo.team == 96) {
+          var colorStr = colorStr96;
+        } else if (objectInfo.team == 97) {
+          var colorStr = colorStr97;
+        } else if (objectInfo.team == 98) {
+          var colorStr = colorStr98;
+        } else if (objectInfo.team == 99) {
+          var colorStr = colorStr99;
+        } else if (objectInfo.team == 100) {
+          var colorStr = colorStr100;
+        }
+
+        //判断是否是人机 如果是人机的话 上方变量 的color 从F00 到 02F702
+        if (objectInfo.isAI) color = "#fff";
+
+        //如果是人机的话 名字 变为 BOT
+        if (objectInfo.isAI) objectInfo.name = "人机";
+        //如果是人机的话 对标 变为 AI
+        if (objectInfo.isAI) objectInfo.team = "AI";
+          drawLine(sWidth / 2, 10, objectInfo.x, objectInfo.y - 30, color);
+        if (objectInfo.x < 0 || objectInfo.y < 0 || objectInfo.x > sWidth || objectInfo.y > sHeight) return;
+          drawMyRect(objectInfo.x - objectInfo.w / 2, objectInfo.y, objectInfo.w, objectInfo.h, 1.6, "#00ffff");
+//方框
+        
+                    drawText("" + objectInfo.dis + "m", objectInfo.x, objectInfo.y - 42, 10, "#333", false);
+                    drawText("" + objectInfo.dis + "m", objectInfo.x, objectInfo.y - 42, 10, "magenta", true);
+                
+                    drawRectangle(objectInfo.x - 41, objectInfo.y - 21, 14, 13, colorStr, true);
+                    drawRectangle1(objectInfo.x - 27, objectInfo.y - 21, 70, 13, 0, "#333", false);
+                    drawText("" + objectInfo.team + "", objectInfo.x - 34, objectInfo.y - 29, 9, "#333", false);
+                    drawText("" + objectInfo.team + "", objectInfo.x - 34, objectInfo.y - 29, 9, "#FFF", true);
+                    
+                    drawText(objectInfo.name, objectInfo.x + 7, objectInfo.y - 29, 9, "#333", false);
+                    drawText(objectInfo.name, objectInfo.x + 7, objectInfo.y - 29, 9, "#FFF", true);                
+                    drawRoundRect(objectInfo.x - 41, objectInfo.y - 7.9, Math.ceil(objectInfo.hp / 1.2), 1.5, 0,
+                        "rgba()", true);
+                                  
+      }
+      }
+  
+      
+
+            
+
+    
+
+
+  
+    function clearCtx() {
+      ctx.clearRect(0, 0, canvasDom.width, canvasDom.height);
+    }
+
+    function setLineWidth(w) {
+      ctx.lineWidth = w;
+    }
+
+    
+    function drawRectangle1(x, y, w, h, color, isFill = true) {
+                x *= iosScale;
+                y *= iosScale;
+                w *= iosScale;
+                h *= iosScale;
+
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba()';
+                ctx.globalAlpha = 0.5;
+                ctx.fillRect(x, y, w, h);
+                ctx.closePath();
+            }
+    
+    
+    function drawRoundRect(x, y, w, h, r, color, isFill = true) {
+                x *= iosScale;
+                y *= iosScale;
+                w *= iosScale;
+                h *= iosScale;
+                r *= iosScale;
+
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.fillStyle = color;
+                ctx.globalAlpha = 1;
+                if (w < 2 * r) r = w / 2;
+                if (h < 2 * r) r = h / 2;
+                ctx.beginPath();
+                ctx.moveTo(x + r, y);
+                ctx.arcTo(x + w, y, x + w, y + h, r);
+                ctx.arcTo(x + w, y + h, x, y + h, r);
+                ctx.arcTo(x, y + h, x, y, r);
+                ctx.arcTo(x, y, x + w, y, r);
+                if (isFill) {
+                    ctx.fill();
+                } else {
+                    ctx.stroke();
+                }
+                ctx.closePath();
+            }
+    
+    
+
+            function drawRectangle(x, y, w, h, color, isFill = true) {
+                x *= iosScale;
+                y *= iosScale;
+                w *= iosScale;
+                h *= iosScale;
+
+                ctx.beginPath();
+
+                ctx.fillStyle = color;
+                ctx.globalAlpha = 1;
+                ctx.fillRect(x, y, w, h, );
+
+                ctx.closePath();
+            }
+    
+    
+    function drawText(text, x, y, size, color, isFill = true) {
+                x *= iosScale;
+                y *= iosScale;
+                size *= iosScale;
+
+                ctx.beginPath();
+                ctx.textAlign = "center";
+                ctx.fillStyle = color;
+                ctx.strokeStyle = color;
+                ctx.globalAlpha = 1;
+                ctx.font = size + 'px' + fontFamily;
+                if (isFill) {
+                    ctx.fillText(text, x, y + size);
+                } else {
+                    ctx.strokeText(text, x, y + size);
+                }
+                ctx.closePath();
+            };
+    
+    
+    
+     
+    function drawMyRect(x, y, width, height, lineWidth, color) {
+
+    x *= iosScale;
+    y *= iosScale;
+    width *= iosScale;
+    height *= iosScale;
+
+    ctx.lineWidth = lineWidth;
+    ctx.strokeStyle = color;
+
+    ctx.beginPath();
+
+    ctx.moveTo(x, y);
+    ctx.lineTo(Number(x) + Number(width) / 6, y);
+    ctx.closePath();
+
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, Number(y) + Number(height / 9));
+    ctx.closePath();
+
+    ctx.moveTo(Number(x) + Number(width) - Number(width) / 6, y);
+    ctx.lineTo(Number(x) + Number(width), y);
+    ctx.closePath();
+
+    ctx.moveTo(Number(x) + Number(width), y);
+    ctx.lineTo(Number(x) + Number(width), Number(y) + Number(height / 9));
+    ctx.closePath();
+
+    ctx.moveTo(Number(x), Number(y) + Number(height));
+    ctx.lineTo(Number(x), Number(y) + Number(height) - Number(height / 9));
+    ctx.closePath();
+
+    ctx.moveTo(Number(x), Number(y) + Number(height));
+    ctx.lineTo(Number(x) + Number(width) / 6, Number(y) + Number(height));
+
+    ctx.moveTo(Number(x) + Number(width), Number(y) + Number(height));
+    ctx.lineTo(Number(x) + Number(width) - (width / 6), Number(y) + Number(height));
+
+    ctx.moveTo(Number(x) + Number(width), Number(y) + Number(height));
+    ctx.lineTo(Number(x) + Number(width), Number(y) + Number(height) - Number(height / 9));
+    ctx.closePath();
+              
+        ctx.stroke();
+}
+    
+    
+    
+    
+    function drawImage(img, x, y, w, h, isFill = true) {
+      x *= iosScale;
+      y *= iosScale;
+      w *= iosScale;
+      h *= iosScale;
+      ctx.beginPath();
+      var img = new Image();
+      img.src = "";
+      
+      img.onload = function () {
+        ctx.drawImage(img, x, y, w, h);
+      }
+    }
+    
+    
+    
+    function drawLine(x1, y1, x2, y2, color) {
+      x1 *= iosScale;
+      y1 *= iosScale;
+      x2 *= iosScale;
+      y2 *= iosScale;
+
+
+
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.fillStyle = color;
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 1;
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.closePath();
+    }
+
+
+
+    function drawText5(text, x, y, size, color, isFill = true) {
+      x *= iosScale;
+      y *= iosScale;
+
+      size *= iosScale;
+
+      ctx.beginPath();
+      ctx.textAlign = "center";
+      ctx.fillStyle = color;
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 2;
+      ctx.font = size + 'px' + fontFamily;
+      if (isFill) {
+        ctx.fillText(text, x, y + size);
+      } else {
+        ctx.strokeText(text, x, y + size);
+      }
+      ctx.closePath();
+    }
+
+  
+   
+    
+    
+    
+
+    function readInt(addr) {
+      return Number(h5gg.getValue(addr, "I32"));
+    }
+
+    function readLong(addr) {
+      return Number(h5gg.getValue(addr, "I64"));
+    }
+
+    function readFloat(addr) {
+      return Number(h5gg.getValue(addr, "F32"));
+    }
+
+    function isNull(addr) {
+      return (addr < 0x100000000 || addr > 0x300000000);
+    }
+
+    function RotatorToMatrix(rotation) {
+      var radPitch = rotation.Pitch * (Math.PI / 180.0);
+      var radYaw = rotation.Yaw * (Math.PI / 180.0);
+      var radRoll = rotation.Roll * (Math.PI / 180.0);
+
+      var SP = Math.sin(radPitch);
+      var CP = Math.cos(radPitch);
+      var SY = Math.sin(radYaw);
+      var CY = Math.cos(radYaw);
+      var SR = Math.sin(radRoll);
+      var CR = Math.cos(radRoll);
+
+      var matrix = new Array(16).fill(0);
+
+      matrix[0] = (CP * CY);
+      matrix[1] = (CP * SY);
+      matrix[2] = (SP);
+      matrix[3] = 0;
+
+      matrix[4] = (SR * SP * CY - CR * SY);
+      matrix[5] = (SR * SP * SY + CR * CY);
+      matrix[6] = (-SR * CP);
+      matrix[7] = 0;
+
+      matrix[8] = (-(CR * SP * CY + SR * SY));
+      matrix[9] = (CY * SR - CR * SP * SY);
+      matrix[10] = (CR * CP);
+      matrix[11] = 0;
+
+      matrix[12] = 0;
+      matrix[13] = 0;
+      matrix[14] = 0;
+      matrix[15] = 1;
+
+      return matrix;
+    }
+
+    function vectorDot(lhs, rhs) {
+      return (((lhs.X * rhs.X) + (lhs.Y * rhs.Y)) + (lhs.Z * rhs.Z));
+    }
+
+    function world2Screen(worldLocation, camViewInfo, tempMatrix) {
+      // var tempMatrix = RotatorToMatrix(camViewInfo.Rotation);
+
+      var vAxisX = {
+        X: tempMatrix[0],
+        Y: tempMatrix[1],
+        Z: tempMatrix[2]
+      };
+      var vAxisY = {
+        X: tempMatrix[4],
+        Y: tempMatrix[5],
+        Z: tempMatrix[6]
+      };
+      var vAxisZ = {
+        X: tempMatrix[8],
+        Y: tempMatrix[9],
+        Z: tempMatrix[10]
+      };
+
+      var vDelta = {
+        X: worldLocation.X - camViewInfo.Location.X,
+        Y: worldLocation.Y - camViewInfo.Location.Y,
+        Z: worldLocation.Z - camViewInfo.Location.Z
+      };
+
+      var vTransformed = {
+        X: vectorDot(vDelta, vAxisY),
+        Y: vectorDot(vDelta, vAxisZ),
+        Z: vectorDot(vDelta, vAxisX)
+      };
+
+      if (vTransformed.Z < 1.0) {
+        vTransformed.Z = 1.0;
+      }
+
+      var fov = camViewInfo.FOV;
+      var screenCenterX = (sWidth / 2.0);
+      var screenCenterY = (sHeight / 2.0);
+
+      var re = {
+        X: (screenCenterX + vTransformed.X * (screenCenterX / Math.tan(fov * (Math.PI / 360.0))) /
+          vTransformed
+            .Z),
+        Y: (screenCenterY - vTransformed.Y * (screenCenterX / Math.tan(fov * (Math.PI / 360.0))) /
+          vTransformed
+            .Z)
+      };
+
+      return re;
+    }
+
+
+    cacheTimer = setInterval(function () {
+      drawCache();
+    }, 1000);
+    drawTimer = setInterval(function () {
+      if (window.draw_state) {
+        shadowDraw();
+
+        if (!window.fpscount) window.fpscount = 0;
+        if (!window.fpstime) window.fpstime = performance.now();
+        window.fpscount++;
+        if ((performance.now() - window.fpstime) > 2000) {
+          window.fps = window.fpscount;
+          window.fpstime = performance.now();
+          window.fpscount = 0;
+        }
+        ctx.textBaseline = "top";
+        ctx.textAlign = "center";
+        ctx.font = '0px "Arial, sans-serif"';
+        ctx.fillStyle = "black";
+        if (window.fps) ctx.fillText(window.fps, 120,80, 60);
+      }
+    }, 15);
+    
+    
+    function draw3() {
+      var DrawBtn = document.getElementById("DrawSH3");
+      if(  window.Diswh == 1 )    {
+        window.Diswh = 0;
+        
+        clearCtx();
+      }
+      else {
+          window.Diswh = 1;
+          
+      }
+    }
+    function draw4() {
+      var DrawBtn = document.getElementById("DrawSH4");
+      if(  window.Disjd == 1 )    {
+        window.Disjd = 0;
+        
+        clearCtx();
+      }
+      else {
+          window.Disjd = 1;
+        
+      }
+    }
+    function draw5() {
+      var DrawBtn = document.getElementById("DrawSH5");
+      if(  window.Dissj == 1 )    {
+        window.Dissj = 0;
+        
+        clearCtx();
+      }
+      else {
+          window.Dissj = 1;
+          
+      }
+    }
+  
+  
+  
+                                                                  </script>
+                                                                  <script>
+
+    //随机颜色 
+    var colorStr1 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr1 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr2 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr2 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr3 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr3 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr4 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr4 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr5 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr5 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr6 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr6 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr7 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr7 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr8 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr8 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr9 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr9 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr10 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr10 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr11 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr11 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr12 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr12 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr13 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr13 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr14 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr14 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr15 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr15 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr16 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr16 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr17 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr17 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr18 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr18 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr19 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr19 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr20 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr20 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr21 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr21 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr22 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr22 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr23 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr23 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr24 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr24 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr25 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr25 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr26 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr26 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr27 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr27 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr28 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr28 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr29 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr29 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr30 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr30 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr31 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr31 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr32 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr32 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr33 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr33 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr34 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr34 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr35 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr35 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr36 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr36 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr37 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr37 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr38 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr38 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr39 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr39 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr40 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr40 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr41 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr41 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr42 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr42 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr43 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr43 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr44 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr44 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr45 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr45 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr46 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr46 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+    var colorStr47 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) {
+      colorStr47 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)];
+    }
+
+    var colorStr48 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr48 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr49 = "";
+    var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr49 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr50 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr50 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr51 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr51 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr52 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr52 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr53 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr53 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr54 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr54 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr55 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr55 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr56 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr56 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr57 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr57 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr58 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr58 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr59 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr59 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr60 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr60 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr61 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr61 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr62 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr62 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr63 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr63 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr64 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr64 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr65 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr65 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr66 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr66 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr67 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr67 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr68 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr68 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr69 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr69 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr70 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr70 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr71 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr71 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr72 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr72 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr73 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr73 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr74 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr74 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr75 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr75 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr76 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr76 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr77 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr77 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr78 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr78 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr79 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr79 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr80 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr80 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr81 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr81 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr82 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr82 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr83 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr83 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr84 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr84 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr85 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr85 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr86 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr86 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr87 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr87 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr88 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr88 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr89 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr89 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr90 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr90 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr91 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr91 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr92 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr92 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr93 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr93 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr94 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr94 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr95 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr95 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr96 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr96 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr97 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr97 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr98 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr98 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var colorStr99 = ""
+      ; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+    for (var i = 0; i < 6; i++) { colorStr99 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; } var
+      colorStr100 = ""; var randomArr = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd'
+        , 'e', 'f']; for (var i = 0; i < 6; i++) { colorStr100 += randomArr[Math.ceil(Math.random() * (15 - 0) + 0)]; }
+    
+      
+
+            
+</script>
+</html>
